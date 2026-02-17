@@ -59,3 +59,8 @@ git reset --hard <コミットID>
 決定：新class Sessionを追加
 影響：MatchListPageがSessionを受け取れるようにする
 
+## 2026/2/18 セッションごとに履歴を保存
+背景：接しオンごとに状態を独立させたい
+決定：DBをsessionに移行していく
+影響：sessionの保存→DBの保存になる
+    　（実装前コミット済み）
