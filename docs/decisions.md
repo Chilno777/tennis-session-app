@@ -5,8 +5,8 @@ git log --oneline -5
 
 ②実装前ログ
 # docs/decisions.md に追記（なぜ/何を/仕様）してからコミット
-git add .
-git commit -m "feat: 何をしたか" -m "理由" -m "詳細"
+git add docs/decisions.md
+git commit -m "docs: ○○機能の設計を記録"
 
 ③実装：コード変更
 # 変更内容確認
