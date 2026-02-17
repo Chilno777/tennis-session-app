@@ -25,6 +25,10 @@ refactor: リファクタリング（挙動は同じで整理）
 docs: ドキュメント変更
 style: UIやフォーマット変更
 
+〇実装ログ確認
+git log --oneline
+
+
 〇戻す操作
 ・安全に過去を見る
 git log --oneline
@@ -49,3 +53,9 @@ git reset --hard <コミットID>
 - 決定: MatchPickの gameA/gameB をそのまま利用し、未入力試合は集計対象外にする
 - ランキング: 総獲得ゲーム数（gamesFor）降順（暫定）
 - 影響: 集計関数をMatchListPageのStateに追加し、StatsPageへ遷移導線を追加
+
+## 2026/2/17 会ごとにスコアを保持できるように
+背景：スコアを練習会ごとに保持できるようにしたい
+決定：新class Sessionを追加
+影響：MatchListPageがSessionを受け取れるようにする
+

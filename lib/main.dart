@@ -60,6 +60,38 @@ class MatchPick {
   }
 }
 
+class Session {
+  Session({
+    required this.id,
+    required this.title,
+    required this.createdAt,
+    required this.participantIndexes,
+    this.courts = 1,
+  });
+
+  final String id;
+  String title;
+  final DateTime createdAt;
+
+  // 名簿（players）の index を持つ。回ごとに参加者が変わるのでここに置く
+  List<int> participantIndexes;
+
+  // 回ごとの設定＆状態
+  int courts;
+
+  // 表示番号（シャッフル）: 元playerIndex -> 表示番号(1..N)
+  Map<int, int> displayNo = {};
+
+  // シャッフル後の参加者順（playerIndexの配列）
+  List<int> order = [];
+
+  // 生成カーソル（循環スライド等で使う）
+  int cursor = 0;
+
+  // 試合（スコア込み）
+  final List<MatchPick> matches = [];
+}
+
 class PlayerStats {
   PlayerStats({required this.playerIndex});
 
@@ -157,20 +189,25 @@ class _PlayerRegisterPageState extends State<PlayerRegisterPage> {
   }
 
   void _goToMatches() {
-    if (_players.length < 4) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('最低4人登録してください')),
-      );
-      return;
-    }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => MatchListPage(players: List.of(_players)),
-      ),
+  if (_players.length < 4) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('最低4人登録してください')),
     );
+    return;
   }
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => SessionListPage(
+        players: List<Player>.from(_players),
+      ),
+    ),
+  );
+}
+
+
+  
 
   @override
   void dispose() {
@@ -248,21 +285,30 @@ class _PlayerRegisterPageState extends State<PlayerRegisterPage> {
 /// - 試合追加（生成）
 /// - 試合カードタップでスコア入力
 class MatchListPage extends StatefulWidget {
-  const MatchListPage({super.key, required this.players});
+  const MatchListPage({
+  super.key, 
+  required this.players,
+  required this.session,
+  });
   final List<Player> players;
+  final Session session;
 
   @override
   State<MatchListPage> createState() => _MatchListPageState();
 }
 
 class _MatchListPageState extends State<MatchListPage> {
+  List<MatchPick> get _matches => widget.session.matches;
   // --- State: participants / matches ---
   final List<bool> _selected = [];      // 参加者チェック（playersと同じ長さ）
-  final List<MatchPick> _matches = [];  // 生成された試合一覧
+  //final List<MatchPick> _matches = [];  // 生成された試合一覧
   final Map<int, int> _playCount = {};  // 出場回数（現状は生成補助に使う）
 
   // --- State: UI options ---
-  int _courts = 1; // コート面数（1〜4）
+  //int _courts = 1; // コート面数（1〜4）
+  int get _courts => widget.session.courts;
+  set _courts(int v) => widget.session.courts = v;
+
 
   // --- State: display numbers (shuffle) ---
   // 元index -> 表示番号（1..N）
@@ -688,6 +734,109 @@ class StatsPage extends StatelessWidget {
     );
   }
 }
+
+class SessionListPage extends StatefulWidget {
+  const SessionListPage({
+    super.key,
+    required this.players,
+  });
+
+  final List<Player> players;
+
+  @override
+  State<SessionListPage> createState() => _SessionListPageState();
+}
+
+class _SessionListPageState extends State<SessionListPage> {
+  final List<Session> _sessions = [];
+
+  void _createSession() async {
+    if (widget.players.length < 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('先にプレイヤーを4人以上登録してください')),
+      );
+      return;
+    }
+
+    final controller = TextEditingController(
+      text: '${DateTime.now().month}/${DateTime.now().day} 練習',
+    );
+
+    final title = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('新規セッション'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'セッション名'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('作成'),
+          ),
+        ],
+      ),
+    );
+
+    if (title == null || title.isEmpty) return;
+
+    final now = DateTime.now();
+    final s = Session(
+      id: now.microsecondsSinceEpoch.toString(),
+      title: title,
+      createdAt: now,
+      participantIndexes: List<int>.generate(widget.players.length, (i) => i), // デフォ全員参加
+      courts: 1,
+    );
+
+    setState(() => _sessions.insert(0, s));
+  }
+
+  void _open(Session s) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MatchListPage(
+          players: widget.players,
+          session: s, // ★ここが今回の要
+        ),
+      ),
+    ).then((_) => setState(() {})); // 戻ったら一覧更新（タイトル変更等に備えて）
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('セッション一覧')),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _createSession,
+        child: const Icon(Icons.add),
+      ),
+      body: _sessions.isEmpty
+          ? const Center(child: Text('右下の＋からセッションを作成'))
+          : ListView.separated(
+              itemCount: _sessions.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, i) {
+                final s = _sessions[i];
+                return ListTile(
+                  title: Text(s.title),
+                  subtitle: Text(
+                    '参加者 ${s.participantIndexes.length}人 / 試合 ${s.matches.length}件',
+                  ),
+                  onTap: () => _open(s),
+                );
+              },
+            ),
+    );
+  }
+}
+
 
 
 class _ScoreInputPageState extends State<ScoreInputPage> {
