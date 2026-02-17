@@ -1,3 +1,42 @@
+〇機能追加の流れ
+①状態確認
+git status
+git log --oneline -5
+
+②実装前ログ
+# docs/decisions.md に追記（なぜ/何を/仕様）してからコミット
+git add.
+git commit -m "feat: 何をしたか" -m "理由" -m "詳細"
+
+③実装：コード変更
+# 変更内容確認
+git diff
+
+④動作確認：仕様のチェックを行う
+
+⑤機能コミット
+git add .
+git commit -m "feat: ○○を追加" -m "要点1" -m "要点2"
+
+
+feat: 新機能
+fix: バグ修正
+refactor: リファクタリング（挙動は同じで整理）
+docs: ドキュメント変更
+style: UIやフォーマット変更
+
+〇戻す操作
+・安全に過去を見る
+git log --oneline
+git switch --detach <コミットID>
+# 戻る
+git switch master
+
+・完全に戻す（消える）
+git reset --hard <コミットID>
+
+
+
 # 意思決定ログ (Decisions)
 
 ## 2026-02-16 履歴管理を開始
@@ -10,14 +49,3 @@
 - 決定: MatchPickの gameA/gameB をそのまま利用し、未入力試合は集計対象外にする
 - ランキング: 総獲得ゲーム数（gamesFor）降順（暫定）
 - 影響: 集計関数をMatchListPageのStateに追加し、StatsPageへ遷移導線を追加
-
-
-〇書き方テンプレ
-git add.
-git commit -m "feat: 何をしたか" -m "理由" -m "詳細"
-
-feat: 新機能
-fix: バグ修正
-refactor: リファクタリング
-docs: ドキュメント変更
-style: UIやフォーマット変更
