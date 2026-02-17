@@ -502,21 +502,7 @@ Widget build(BuildContext context) {
           // 試合一覧
           Expanded(
             flex: 3,
-            child: ListView.builder(
-              itemCount: _matches.length,
-              itemBuilder: (context, i) {
-                final m = _matches[i];
-                return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Text(
-                      '試合${i + 1}  ${_name(m.a1)} & ${_name(m.a2)} vs ${_name(m.b1)} & ${_name(m.b2)}\n'
-                      'スコア: ${m.scoreText} / 結果: ${m.resultText}',
-                    ),
-                  ),
-                );
-              },
-            ),
+            child: _buildMatchList(),
           ),
         ],
       ),
@@ -611,6 +597,7 @@ Widget build(BuildContext context) {
             builder: (_) => ScoreInputPage(
               players: widget.players,
               match: match,
+              displayName: _name,
             ),
           ),
         );
@@ -645,10 +632,12 @@ class ScoreInputPage extends StatefulWidget {
     super.key,
     required this.players,
     required this.match,
+    required this.displayName,
   });
 
   final List<Player> players;
   final MatchPick match;
+  final String Function(int index) displayName;
 
   @override
   State<ScoreInputPage> createState() => _ScoreInputPageState();
@@ -708,7 +697,8 @@ class _ScoreInputPageState extends State<ScoreInputPage> {
   // NOTE:
   // ここでは「表示番号シャッフル」は反映していません。
   // 反映したい場合は displayNo を渡す設計にします（後でOK）。
-  String _name(int i) => '${i + 1}:${widget.players[i].name}';
+  String _name(int i) => widget.displayName(i);
+
 
   @override
   void initState() {
