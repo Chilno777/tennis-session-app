@@ -327,15 +327,6 @@ class _MatchListPageState extends State<MatchListPage> {
     }
   }
 
-  /// 参加者（チェック済み）の index 一覧
-  List<int> _selectedMemberIndexes() {
-    final members = <int>[];
-    for (int i = 0; i < _selected.length; i++) {
-      if (_selected[i]) members.add(i);
-    }
-    return members;
-  }
-
   /// 表示用「番号:名前」
   /// ★番号シャッフルの影響はここに集約
   String _name(int index) {
@@ -345,7 +336,8 @@ class _MatchListPageState extends State<MatchListPage> {
 
   /// 番号シャッフル（表示のみ）
   void _shuffleNumbers() {
-  final members = _selectedMemberIndexes();
+  final members = widget.session.participantIndexes;
+  //final members = _selectedMemberIndexes();
   if (members.isEmpty) return;
 
   // 1..N をシャッフルして割り当て
@@ -374,7 +366,7 @@ class _MatchListPageState extends State<MatchListPage> {
   /// コート面数ぶん繰り返しています。
   /// =============================================================
   void _addMatch() {
-  final members = _selectedMemberIndexes();
+  final members = List<int>.from(widget.session.participantIndexes);
 
   if (members.length < 4) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -486,66 +478,21 @@ Widget build(BuildContext context) {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          Text('selected: ${_selectedMemberIndexes().length}'),
+          Text('selected: ${widget.session.participantIndexes.length}'),
           const SizedBox(height: 8),
 
           // 参加者チェック
           Expanded(
             flex: 2,
-            child: ListView.builder(
-              itemCount: widget.players.length,
-              itemBuilder: (context, i) {
-                return CheckboxListTile(
-                  value: _selected[i],
-                  title: Text(_name(i)),
-                  onChanged: (v) => setState(() => _selected[i] = v ?? false),
-                );
-              },
-            ),
+            child: _buildParticipantChecklist(),
           ),
 
           const SizedBox(height: 8),
-
-          // コート面数
-          Row(
-            children: [
-              const Text('コート面数'),
-              const SizedBox(width: 12),
-              DropdownButton<int>(
-                value: _courts,
-                items: const [1, 2, 3, 4]
-                    .map((v) => DropdownMenuItem(value: v, child: Text('$v')))
-                    .toList(),
-                onChanged: (v) {
-                  if (v != null) setState(() => _courts = v);
-                },
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          // ボタン列
-          Row(
-            children: [
-              ElevatedButton.icon(
-                onPressed: _shuffleNumbers,
-                icon: const Icon(Icons.shuffle),
-                label: const Text('番号シャッフル'),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton.icon(
-                onPressed: _addMatch,
-                icon: const Icon(Icons.add),
-                label: const Text('試合追加'),
-              ),
-            ],
-          ),
+          _buildControls(),
 
           const SizedBox(height: 12),
           const Text('対戦表', style: TextStyle(fontWeight: FontWeight.bold)),
 
-          // 試合一覧
           Expanded(
             flex: 3,
             child: _buildMatchList(),
@@ -558,17 +505,35 @@ Widget build(BuildContext context) {
 
 
   Widget _buildParticipantChecklist() {
-    return ListView.builder(
-      itemCount: widget.players.length,
-      itemBuilder: (context, i) {
-        return CheckboxListTile(
-          value: _selected[i],
-          title: Text(_name(i)),
-          onChanged: (v) => setState(() => _selected[i] = v ?? false),
-        );
-      },
-    );
-  }
+  return ListView.builder(
+    itemCount: widget.players.length,
+    itemBuilder: (context, i) {
+      final isSelected = widget.session.participantIndexes.contains(i);
+
+      return CheckboxListTile(
+        value: isSelected,
+        title: Text(_name(i)),
+        onChanged: (v) {
+          setState(() {
+            if (v == true) {
+              // 重複防止
+              if (!widget.session.participantIndexes.contains(i)) {
+                widget.session.participantIndexes.add(i);
+              }
+            } else {
+              widget.session.participantIndexes.remove(i);
+            }
+
+            // 参加者が変わったら順番/シャッフル系をリセット
+            widget.session.order.clear();
+            widget.session.displayNo.clear();
+            widget.session.cursor = 0;
+          });
+        },
+      );
+    },
+  );
+}
 
   Widget _buildControls() {
     return Column(

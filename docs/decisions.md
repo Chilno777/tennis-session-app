@@ -39,6 +39,38 @@ git switch master
 ・完全に戻す（消える）
 git reset --hard <コミットID>
 
+〇再開
+①エミュレーターを起動
+vutual device manager(Android studio) で　pixel5を起動
+
+②ターミナルで
+flutter run
+
+③状態確認
+git status
+1.今どのブランチ？(*がついている)
+ 開発ライン
+ master → 安定版
+
+feature/session → セッション機能開発用
+
+fix/score-bug → バグ修正用
+
+2.何が変更された？
+前回コミットした状態と、今のファイルの差
+
+3.ステージ済みか？
+gitの構造
+① 作業ディレクトリ（編集中）
+② ステージ（コミット予定）
+③ リポジトリ（保存済み）
+Changes not staged	編集したけど add してない
+Changes to be committed	add 済み
+nothing to commit	変更なし
+
+４．git diff
+何を編集したのかが分かる
+
 
 
 # 意思決定ログ (Decisions)

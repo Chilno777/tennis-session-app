@@ -1,16 +1,37 @@
-# flutter_application_1
+# Tennis Match Manager App
 
-A new Flutter project.
+## 概要
+テニスの練習活動を効率化するために開発した、
+ダブルス対戦表生成＆スコア管理アプリ。
 
-## Getting Started
+## 開発背景
+・毎回の練習で対戦表作成に時間がかかっていた  
+・スコアが記録されず個人成績が残らなかった  
+・練習会ごとにデータを独立管理したかった  
 
-This project is a starting point for a Flutter application.
+## 設計思想
+本アプリでは「セッション単位で状態を管理」する設計を採用。
 
-A few resources to get you started if this is your first Flutter project:
+- Sessionクラスを導入
+- 練習会ごとにMatchとScoreを保持
+- 将来的なDB保存を見据えた構造
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+##　技術構成
+- Flutter
+- Dart
+- StatefulWidgetベースの状態管理
+- Gitによるバージョン管理
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 設計ドキュメント
+詳細設計は docs フォルダを参照：
+
+- architecture.md
+- session_design.md
+- match_logic.md
+- state_management.md
+
+##  今後の実装予定
+- SQLite保存機能
+- 個人成績ページの強化
+- 勝率・ペア相性分析機能
+- Firebase連携
