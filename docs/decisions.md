@@ -1,81 +1,3 @@
-〇機能追加の流れ
-①状態確認
-git status
-git log --oneline -5
-
-②実装前ログ
-# docs/decisions.md に追記（なぜ/何を/仕様）してからコミット
-git add docs/architecture.md
-git add docs/code.md
-git add docs/decisions.md
-git add docs/matich_logic.md
-git commit -m "docs: ○○機能の設計を記録"
-
-③実装：コード変更
-# 変更内容確認
-git diff
-
-④動作確認：仕様のチェックを行う
-
-⑤機能コミット
-git add .
-git commit -m "feat: ○○を追加" -m "要点1" -m "要点2"
-
-
-feat: 新機能
-fix: バグ修正
-refactor: リファクタリング（挙動は同じで整理）
-docs: ドキュメント変更
-style: UIやフォーマット変更
-
-〇実装ログ確認
-git log --oneline
-
-
-〇戻す操作
-・安全に過去を見る
-git log --oneline
-git switch --detach <コミットID>
-# 戻る
-git switch master
-
-・完全に戻す（消える）
-git reset --hard <コミットID>
-
-〇再開
-①エミュレーターを起動
-vutual device manager(Android studio) で　pixel5を起動
-
-②ターミナルで
-flutter run
-
-③状態確認
-git status
-1.今どのブランチ？(*がついている)
- 開発ライン
- master → 安定版
-
-feature/session → セッション機能開発用
-
-fix/score-bug → バグ修正用
-
-2.何が変更された？
-前回コミットした状態と、今のファイルの差
-
-3.ステージ済みか？
-gitの構造
-① 作業ディレクトリ（編集中）
-② ステージ（コミット予定）
-③ リポジトリ（保存済み）
-Changes not staged	編集したけど add してない
-Changes to be committed	add 済み
-nothing to commit	変更なし
-
-４．git diff
-何を編集したのかが分かる
-
-
-
 # 意思決定ログ (Decisions)
 
 ## 2026-02-16 履歴管理を開始
@@ -98,9 +20,17 @@ nothing to commit	変更なし
 未決: セッションの作成/選択UI（どこに置くか）
 
 ## 2026/02/18 セッションごとに履歴を永続化
-背景：セッションごとに状態を独立され、履歴として残す
+背景：セッションごとに状態を独立させ、履歴として残す
 決定：永続化の単位を「アプリ全体」→「Session」へ移行
 仕様：「アプリ再起動後もセッション一覧と内容が復元される」
 影響: 保存/読込の入口が SessionRepository（仮）に集約される（UIはRepository経由）
-    　
-実装前コミットから！！！
+
+## 2026/02/26　sessionへの完全移行
+背景：前回の変更で移行しきれていない部分
+仕様：_displayNo / _order / _cursor が State に残っている
+
+_shuffleNumbers() は session.participantIndexes から作ってるのに、保存先が State 側
+
+この２つを修正
+
+影響：セッションへの完全移行
