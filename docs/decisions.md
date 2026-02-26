@@ -5,7 +5,10 @@ git log --oneline -5
 
 ②実装前ログ
 # docs/decisions.md に追記（なぜ/何を/仕様）してからコミット
+git add docs/architecture.md
+git add docs/code.md
 git add docs/decisions.md
+git add docs/matich_logic.md
 git commit -m "docs: ○○機能の設計を記録"
 
 ③実装：コード変更
@@ -99,4 +102,5 @@ nothing to commit	変更なし
 決定：永続化の単位を「アプリ全体」→「Session」へ移行
 仕様：「アプリ再起動後もセッション一覧と内容が復元される」
 影響: 保存/読込の入口が SessionRepository（仮）に集約される（UIはRepository経由）
-    　（実装前コミット済み）次回ここから！！
+    　
+実装前コミットから！！！
