@@ -298,9 +298,16 @@ class MatchListPage extends StatefulWidget {
 }
 
 class _MatchListPageState extends State<MatchListPage> {
+  Map<int, int> get _displayNo => widget.session.displayNo;
+
+  List<int> get _order => widget.session.order;
+  set _order(List<int> v) => widget.session.order = v;
+
+  int get _cursor => widget.session.cursor;
+  set _cursor(int v) => widget.session.cursor = v;
   List<MatchPick> get _matches => widget.session.matches;
   // --- State: participants / matches ---
-  final List<bool> _selected = [];      // 参加者チェック（playersと同じ長さ）
+  //final List<bool> _selected = [];      // 参加者チェック（playersと同じ長さ）
   //final List<MatchPick> _matches = [];  // 生成された試合一覧
   final Map<int, int> _playCount = {};  // 出場回数（現状は生成補助に使う）
 
@@ -313,16 +320,13 @@ class _MatchListPageState extends State<MatchListPage> {
   // --- State: display numbers (shuffle) ---
   // 元index -> 表示番号（1..N）
   // ※内部ロジックは index のまま。表示だけ番号を変える。
-  final Map<int, int> _displayNo = {};
-  List<int> _order = []; // 表示番号(1..N)の順に並べた参加者index
-  int _cursor = 0;       // 次に使う開始位置（4人ずつ進む）
 
 
   @override
   void initState() {
     super.initState();
     for (int i = 0; i < widget.players.length; i++) {
-      _selected.add(true); // デフォルト全員参加
+      //_selected.add(true); // デフォルト全員参加
       _playCount[i] = 0;
     }
   }
@@ -365,7 +369,7 @@ class _MatchListPageState extends State<MatchListPage> {
   /// 今は「出場回数が少ない順に4人を取る」を、
   /// コート面数ぶん繰り返しています。
   /// =============================================================
-  void _addMatch() {
+ void _addMatch() {
   final members = List<int>.from(widget.session.participantIndexes);
 
   if (members.length < 4) {
@@ -375,15 +379,34 @@ class _MatchListPageState extends State<MatchListPage> {
     return;
   }
 
-  setState(() {
-    for (int c = 0; c < _courts; c++) {
-      if (_order.isEmpty) {
-        // シャッフル未実行でも動くように保険（必要なら消してOK）
-        _order = List<int>.from(members);
-        _cursor = 0;
-      }
+  bool isOrderValid() {
+    if (_order.length != members.length) return false;
+    final set = members.toSet();
+    return _order.every(set.contains);
+  }
 
-      int pick(int offset) => _order[(_cursor + offset) % _order.length];
+  void rebuildOrderFromMembers() {
+    _order = List<int>.from(members);
+
+    final canSortByDisplayNo =
+        _displayNo.isNotEmpty && _order.every((i) => _displayNo.containsKey(i));
+    if (canSortByDisplayNo) {
+      _order.sort((a, b) => _displayNo[a]!.compareTo(_displayNo[b]!));
+    }
+
+    _cursor = 0;
+  }
+
+  setState(() {
+    if (!isOrderValid()) {
+      rebuildOrderFromMembers();
+    }
+
+    final n = _order.length;
+
+    for (int c = 0; c < _courts; c++) {
+      final start = _cursor % n;
+      int pick(int offset) => _order[(start + offset) % n];
 
       final a1 = pick(0);
       final a2 = pick(1);
@@ -391,10 +414,12 @@ class _MatchListPageState extends State<MatchListPage> {
       final b2 = pick(3);
 
       _matches.add(MatchPick(a1: a1, a2: a2, b1: b1, b2: b2));
-      _cursor = (_cursor + 4) % _order.length;
+
+      // ★ 3人引き継いで1人だけ入れ替える（循環スライド）
+      _cursor = (start - 1 + n) % n;
     }
   });
-} // ← ★ここで _addMatch が閉じる！
+}
 
 
 List<PlayerStats> _computeStats() {
