@@ -89,5 +89,5 @@
 ## Screenshots
 
 ### 対戦表画面
-![Match List](assets/screenshots/match_list.png)
+![Match List](8c94058a1978df4cf3d3ef2e8671f06d915dcd40)
 
