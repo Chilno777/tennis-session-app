@@ -306,9 +306,6 @@ class _MatchListPageState extends State<MatchListPage> {
   int get _cursor => widget.session.cursor;
   set _cursor(int v) => widget.session.cursor = v;
   List<MatchPick> get _matches => widget.session.matches;
-  // --- State: participants / matches ---
-  //final List<bool> _selected = [];      // 参加者チェック（playersと同じ長さ）
-  //final List<MatchPick> _matches = [];  // 生成された試合一覧
   final Map<int, int> _playCount = {};  // 出場回数（現状は生成補助に使う）
 
   // --- State: UI options ---
@@ -553,6 +550,7 @@ Widget build(BuildContext context) {
             widget.session.order.clear();
             widget.session.displayNo.clear();
             widget.session.cursor = 0;
+            widget.session.matches.clear();
           });
         },
       );
