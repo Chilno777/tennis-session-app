@@ -86,6 +86,7 @@
 
 本プロジェクトは現在も改善を継続中。
 
+<<<<<<< HEAD
 ##  Screenshots
 ### 対戦表画面
 ![Match List](assets/screenshots/match_list.png)

@@ -1,34 +1,58 @@
 import 'package:flutter/material.dart';
 
+import 'package:flutter/material.dart';
+
 /// =============================================================
-/// Tennis Doubles App (MVP)
+/// ① アプリ全体の概要
 /// -------------------------------------------------------------
-/// 画面:
-///  1) PlayerRegisterPage  : プレイヤー登録（追加/編集/削除）
-///  2) MatchListPage       : 参加者選択・番号シャッフル・試合生成・試合一覧
-///  3) ScoreInputPage      : スコア入力（MatchPickに保存）
+/// このファイルは以下の役割で構成する
 ///
-/// 重要な変更ポイント:
-///  - 試合生成ロジック: _addMatch()   ★ここを差し替える
-///  - 番号シャッフル表示: _displayNo と _name() ★ここを触る
+/// ①-1 アプリ起動
+/// ②   モデル定義
+/// ③   対戦表まわり（メイン機能）
+/// ④   スコア入力
+/// ⑤   個人成績
+/// ⑥   セッション一覧
+/// ⑦   プレイヤー登録
+///
+/// 今後は「③-5を変更」など、番号ベースで修正指示を出す
 /// =============================================================
 
 /// =============================================================
-/// Models
+/// ①-1 アプリ起動
 /// =============================================================
 
-/// プレイヤー（現状は名前だけ）
-///
-/// 番号は index + 1 を表示に使う方針（削除すると自動で詰まる）
+void main() => runApp(const MyApp());
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: PlayerRegisterPage(),
+    );
+  }
+}
+
+/// =============================================================
+/// ② モデル定義
+/// -------------------------------------------------------------
+/// ②-1 Player
+/// ②-2 MatchPick
+/// ②-3 Session
+/// ②-4 PlayerStats
+/// =============================================================
+
+/// ②-1 プレイヤー
 class Player {
   Player({required this.name});
   String name;
 }
 
-/// 1試合ぶんの対戦カード（内部はプレイヤーの index で管理）
-///
-/// a1,a2 vs b1,b2
-/// スコアは gameA / gameB に保存（未入力は null）
+/// ②-2 1試合ぶんの対戦カード
+/// a1,a2 vs b1,b2 を player index で保持
 class MatchPick {
   MatchPick({
     required this.a1,
@@ -60,6 +84,8 @@ class MatchPick {
   }
 }
 
+/// ②-3 セッション
+/// 1回の練習日 / 大会日 / イベント単位の状態を持つ
 class Session {
   Session({
     required this.id,
@@ -73,25 +99,26 @@ class Session {
   String title;
   final DateTime createdAt;
 
-  // 名簿（players）の index を持つ。回ごとに参加者が変わるのでここに置く
+  /// この回に参加するプレイヤーの index
   List<int> participantIndexes;
 
-  // 回ごとの設定＆状態
+  /// コート面数
   int courts;
 
-  // 表示番号（シャッフル）: 元playerIndex -> 表示番号(1..N)
+  /// 元playerIndex -> 表示番号（1..N）
   Map<int, int> displayNo = {};
 
-  // シャッフル後の参加者順（playerIndexの配列）
+  /// シャッフル後の順番
   List<int> order = [];
 
-  // 生成カーソル（循環スライド等で使う）
+  /// 次回試合生成の開始位置
   int cursor = 0;
 
-  // 試合（スコア込み）
+  /// この回で作られた試合一覧
   final List<MatchPick> matches = [];
 }
 
+/// ②-4 個人成績
 class PlayerStats {
   PlayerStats({required this.playerIndex});
 
@@ -102,8 +129,8 @@ class PlayerStats {
   int losses = 0;
   int draws = 0;
 
-  int gamesFor = 0;      // 総獲得ゲーム
-  int gamesAgainst = 0;  // 総失ゲーム
+  int gamesFor = 0;
+  int gamesAgainst = 0;
 
   double get gameWinRate {
     final total = gamesFor + gamesAgainst;
@@ -112,184 +139,29 @@ class PlayerStats {
   }
 }
 
-
 /// =============================================================
-/// App Entry
+/// ③ 対戦表ページ
+/// -------------------------------------------------------------
+/// ③-1 Widget定義
+/// ③-2 session参照getter
+/// ③-3 初期化
+/// ③-4 表示名 / シャッフル
+/// ③-5 試合生成
+/// ③-6 成績集計
+/// ③-7 build
+/// ③-8 参加者チェックリスト
+/// ③-9 操作ボタン群
+/// ③-10 試合一覧
+/// ③-11 試合カード
 /// =============================================================
 
-void main() => runApp(const MyApp());
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: PlayerRegisterPage(),
-    );
-  }
-}
-
-/// =============================================================
-/// Page: プレイヤー登録
-/// =============================================================
-/// - 追加/編集/削除
-/// - 4人以上で「対戦表へ」遷移
-class PlayerRegisterPage extends StatefulWidget {
-  const PlayerRegisterPage({super.key});
-
-  @override
-  State<PlayerRegisterPage> createState() => _PlayerRegisterPageState();
-}
-
-class _PlayerRegisterPageState extends State<PlayerRegisterPage> {
-  final TextEditingController _nameController = TextEditingController();
-  final List<Player> _players = [];
-
-  void _addPlayer() {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) return;
-
-    setState(() {
-      _players.add(Player(name: name));
-      _nameController.clear();
-    });
-  }
-
-  Future<void> _editPlayerName(int index) async {
-    final player = _players[index];
-    final editController = TextEditingController(text: player.name);
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('名前を編集'),
-        content: TextField(controller: editController, autofocus: true),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('キャンセル'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, editController.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-
-    if (result != null && result.isNotEmpty) {
-      setState(() => player.name = result);
-    }
-  }
-
-  void _deletePlayer(int index) {
-    setState(() => _players.removeAt(index));
-  }
-
-  void _goToMatches() {
-  if (_players.length < 4) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('最低4人登録してください')),
-    );
-    return;
-  }
-
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => SessionListPage(
-        players: List<Player>.from(_players),
-      ),
-    ),
-  );
-}
-
-
-  
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('プレイヤー登録'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.arrow_forward),
-            tooltip: '対戦表へ',
-            onPressed: _goToMatches,
-          ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            /// 追加フォーム
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: '名前を入力',
-                border: OutlineInputBorder(),
-              ),
-              onSubmitted: (_) => _addPlayer(),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _addPlayer,
-                child: const Text('追加'),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            /// 一覧
-            Expanded(
-              child: ListView.builder(
-                itemCount: _players.length,
-                itemBuilder: (context, index) {
-                  final player = _players[index];
-                  return ListTile(
-                    leading: Text('${index + 1}'),
-                    title: Text(player.name),
-                    onTap: () => _editPlayerName(index),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: () => _deletePlayer(index),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// =============================================================
-/// Page: 対戦表
-/// =============================================================
-/// - 参加者チェック
-/// - 番号シャッフル（表示だけ）
-/// — - コート面数（1〜4）
-/// - 試合追加（生成）
-/// - 試合カードタップでスコア入力
 class MatchListPage extends StatefulWidget {
   const MatchListPage({
-  super.key, 
-  required this.players,
-  required this.session,
+    super.key,
+    required this.players,
+    required this.session,
   });
+
   final List<Player> players;
   final Session session;
 
@@ -298,6 +170,7 @@ class MatchListPage extends StatefulWidget {
 }
 
 class _MatchListPageState extends State<MatchListPage> {
+  /// ③-2 session参照getter
   Map<int, int> get _displayNo => widget.session.displayNo;
 
   List<int> get _order => widget.session.order;
@@ -305,259 +178,259 @@ class _MatchListPageState extends State<MatchListPage> {
 
   int get _cursor => widget.session.cursor;
   set _cursor(int v) => widget.session.cursor = v;
-  List<MatchPick> get _matches => widget.session.matches;
-  final Map<int, int> _playCount = {};  // 出場回数（現状は生成補助に使う）
 
-  // --- State: UI options ---
-  //int _courts = 1; // コート面数（1〜4）
+  List<MatchPick> get _matches => widget.session.matches;
+
   int get _courts => widget.session.courts;
   set _courts(int v) => widget.session.courts = v;
 
+  /// 生成補助用
+  final Map<int, int> _playCount = {};
 
-  // --- State: display numbers (shuffle) ---
-  // 元index -> 表示番号（1..N）
-  // ※内部ロジックは index のまま。表示だけ番号を変える。
-
-
+  /// ③-3 初期化
   @override
   void initState() {
     super.initState();
     for (int i = 0; i < widget.players.length; i++) {
-      //_selected.add(true); // デフォルト全員参加
       _playCount[i] = 0;
     }
   }
 
-  /// 表示用「番号:名前」
-  /// ★番号シャッフルの影響はここに集約
+  /// ③-4-1 表示用「番号:名前」
   String _name(int index) {
     final no = _displayNo[index] ?? (index + 1);
     return '$no:${widget.players[index].name}';
   }
 
-  /// 番号シャッフル（表示のみ）
+  /// ③-4-2 番号シャッフル
   void _shuffleNumbers() {
-  final members = widget.session.participantIndexes;
-  //final members = _selectedMemberIndexes();
-  if (members.isEmpty) return;
+    final members = widget.session.participantIndexes;
+    if (members.isEmpty) return;
 
-  // 1..N をシャッフルして割り当て
-  final nums = List<int>.generate(members.length, (i) => i + 1)..shuffle();
+    final nums = List<int>.generate(members.length, (i) => i + 1)..shuffle();
 
-  setState(() {
-    _displayNo.clear();
-    for (int k = 0; k < members.length; k++) {
-      _displayNo[members[k]] = nums[k];
-    }
+    setState(() {
+      _displayNo.clear();
 
-    // ★ ここが重要：表示番号の小さい順（1,2,3...）に並べた順番を作る
-    _order = List<int>.from(members);
-    _order.sort((a, b) => _displayNo[a]!.compareTo(_displayNo[b]!));
+      for (int k = 0; k < members.length; k++) {
+        _displayNo[members[k]] = nums[k];
+      }
 
-    _cursor = 0; // シャッフルしたら先頭から
-  });
-}
-
-
-  /// =============================================================
-  /// ★ 試合追加（生成）ロジック
-  /// -------------------------------------------------------------
-  /// ここを差し替えると、生成方式を自由に変えられます。
-  /// 今は「出場回数が少ない順に4人を取る」を、
-  /// コート面数ぶん繰り返しています。
-  /// =============================================================
- void _addMatch() {
-  final members = List<int>.from(widget.session.participantIndexes);
-
-  if (members.length < 4) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('参加者は4人以上必要です')),
-    );
-    return;
-  }
-
-  bool isOrderValid() {
-    if (_order.length != members.length) return false;
-    final set = members.toSet();
-    return _order.every(set.contains);
-  }
-
-  void rebuildOrderFromMembers() {
-    _order = List<int>.from(members);
-
-    final canSortByDisplayNo =
-        _displayNo.isNotEmpty && _order.every((i) => _displayNo.containsKey(i));
-    if (canSortByDisplayNo) {
+      _order = List<int>.from(members);
       _order.sort((a, b) => _displayNo[a]!.compareTo(_displayNo[b]!));
-    }
 
-    _cursor = 0;
+      _cursor = 0;
+    });
   }
 
-  setState(() {
-    if (!isOrderValid()) {
-      rebuildOrderFromMembers();
-    }
+  /// ③-5 試合生成
+  /// シャッフル順に沿って循環スライドで試合を作る
+  void _addMatch() {
+    final members = List<int>.from(widget.session.participantIndexes);
 
-    final n = _order.length;
-
-    for (int c = 0; c < _courts; c++) {
-      final start = _cursor % n;
-      int pick(int offset) => _order[(start + offset) % n];
-
-      final a1 = pick(0);
-      final a2 = pick(1);
-      final b1 = pick(2);
-      final b2 = pick(3);
-
-      _matches.add(MatchPick(a1: a1, a2: a2, b1: b1, b2: b2));
-
-      // ★ 3人引き継いで1人だけ入れ替える（循環スライド）
-      _cursor = (start - 1 + n) % n;
-    }
-  });
-}
-
-
-List<PlayerStats> _computeStats() {
-  // ★型を明示するとエラーが消えます
-  final List<PlayerStats> stats = List.generate(
-    widget.players.length,
-    (i) => PlayerStats(playerIndex: i),
-  );
-
-  for (final m in _matches) {
-    if (m.gameA == null || m.gameB == null) continue;
-
-    final aTeam = [m.a1, m.a2];
-    final bTeam = [m.b1, m.b2];
-    final ga = m.gameA!;
-    final gb = m.gameB!;
-
-    for (final p in [...aTeam, ...bTeam]) {
-      stats[p].matches += 1;
-    }
-
-    for (final p in aTeam) {
-      stats[p].gamesFor += ga;
-      stats[p].gamesAgainst += gb;
-    }
-    for (final p in bTeam) {
-      stats[p].gamesFor += gb;
-      stats[p].gamesAgainst += ga;
-    }
-
-    if (ga > gb) {
-      for (final p in aTeam) { stats[p].wins += 1; }
-      for (final p in bTeam) { stats[p].losses += 1; }
-    } else if (ga < gb) {
-      for (final p in aTeam) { stats[p].losses += 1; }
-      for (final p in bTeam) { stats[p].wins += 1; }
-    } else {
-      for (final p in [...aTeam, ...bTeam]) { stats[p].draws += 1; }
-    }
-  }
-
-  return stats;
-}
-
-
-  /// =============================================================
-  /// UI
-  /// =============================================================
-
-@override
-Widget build(BuildContext context) {
-  return Scaffold(
-    appBar: AppBar(
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('対戦表'),
-          //Text('matches: ${_matches.length}'),
-        ],
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.leaderboard),
-          tooltip: '個人成績',
-          onPressed: () {
-            final stats = _computeStats();
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => StatsPage(
-                  players: widget.players,
-                  stats: stats,
-                  displayName: _name,),
-              ),
-            );
-          },
-        ),
-      ],
-    ),
-    body: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Text('selected: ${widget.session.participantIndexes.length}'),
-          const SizedBox(height: 8),
-
-          // 参加者チェック
-          Expanded(
-            flex: 2,
-            child: _buildParticipantChecklist(),
-          ),
-
-          const SizedBox(height: 8),
-          _buildControls(),
-
-          const SizedBox(height: 12),
-          const Text('対戦表', style: TextStyle(fontWeight: FontWeight.bold)),
-
-          Expanded(
-            flex: 3,
-            child: _buildMatchList(),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-
-  Widget _buildParticipantChecklist() {
-  return ListView.builder(
-    itemCount: widget.players.length,
-    itemBuilder: (context, i) {
-      final isSelected = widget.session.participantIndexes.contains(i);
-
-      return CheckboxListTile(
-        value: isSelected,
-        title: Text(_name(i)),
-        onChanged: (v) {
-          setState(() {
-            if (v == true) {
-              // 重複防止
-              if (!widget.session.participantIndexes.contains(i)) {
-                widget.session.participantIndexes.add(i);
-              }
-            } else {
-              widget.session.participantIndexes.remove(i);
-            }
-
-            // 参加者が変わったら順番/シャッフル系をリセット
-            widget.session.order.clear();
-            widget.session.displayNo.clear();
-            widget.session.cursor = 0;
-            widget.session.matches.clear();
-          });
-        },
+    if (members.length < 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('参加者は4人以上必要です')),
       );
-    },
-  );
-}
+      return;
+    }
 
+    bool isOrderValid() {
+      if (_order.length != members.length) return false;
+      final set = members.toSet();
+      return _order.every(set.contains);
+    }
+
+    void rebuildOrderFromMembers() {
+      _order = List<int>.from(members);
+
+      final canSortByDisplayNo =
+          _displayNo.isNotEmpty && _order.every((i) => _displayNo.containsKey(i));
+
+      if (canSortByDisplayNo) {
+        _order.sort((a, b) => _displayNo[a]!.compareTo(_displayNo[b]!));
+      }
+
+      _cursor = 0;
+    }
+
+    setState(() {
+      if (!isOrderValid()) {
+        rebuildOrderFromMembers();
+      }
+
+      final n = _order.length;
+
+      for (int c = 0; c < _courts; c++) {
+        final start = _cursor % n;
+        int pick(int offset) => _order[(start + offset) % n];
+
+        final a1 = pick(0);
+        final a2 = pick(1);
+        final b1 = pick(2);
+        final b2 = pick(3);
+
+        _matches.add(
+          MatchPick(
+            a1: a1,
+            a2: a2,
+            b1: b1,
+            b2: b2,
+          ),
+        );
+
+        _cursor = (start - 1 + n) % n;
+      }
+    });
+  }
+
+  /// ③-6 個人成績集計
+  List<PlayerStats> _computeStats() {
+    final List<PlayerStats> stats = List.generate(
+      widget.players.length,
+      (i) => PlayerStats(playerIndex: i),
+    );
+
+    for (final m in _matches) {
+      if (m.gameA == null || m.gameB == null) continue;
+
+      final aTeam = [m.a1, m.a2];
+      final bTeam = [m.b1, m.b2];
+      final ga = m.gameA!;
+      final gb = m.gameB!;
+
+      for (final p in [...aTeam, ...bTeam]) {
+        stats[p].matches += 1;
+      }
+
+      for (final p in aTeam) {
+        stats[p].gamesFor += ga;
+        stats[p].gamesAgainst += gb;
+      }
+
+      for (final p in bTeam) {
+        stats[p].gamesFor += gb;
+        stats[p].gamesAgainst += ga;
+      }
+
+      if (ga > gb) {
+        for (final p in aTeam) {
+          stats[p].wins += 1;
+        }
+        for (final p in bTeam) {
+          stats[p].losses += 1;
+        }
+      } else if (ga < gb) {
+        for (final p in aTeam) {
+          stats[p].losses += 1;
+        }
+        for (final p in bTeam) {
+          stats[p].wins += 1;
+        }
+      } else {
+        for (final p in [...aTeam, ...bTeam]) {
+          stats[p].draws += 1;
+        }
+      }
+    }
+
+    return stats;
+  }
+
+  /// ③-7 メインUI
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text('対戦表'),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.leaderboard),
+            tooltip: '個人成績',
+            onPressed: () {
+              final stats = _computeStats();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => StatsPage(
+                    players: widget.players,
+                    stats: stats,
+                    displayName: _name,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Text('selected: ${widget.session.participantIndexes.length}'),
+            const SizedBox(height: 8),
+
+            Expanded(
+              flex: 2,
+              child: _buildParticipantChecklist(),
+            ),
+
+            const SizedBox(height: 8),
+            _buildControls(),
+
+            const SizedBox(height: 12),
+            const Text(
+              '対戦表',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+
+            Expanded(
+              flex: 3,
+              child: _buildMatchList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// ③-8 参加者チェックリスト
+  Widget _buildParticipantChecklist() {
+    return ListView.builder(
+      itemCount: widget.players.length,
+      itemBuilder: (context, i) {
+        final isSelected = widget.session.participantIndexes.contains(i);
+
+        return CheckboxListTile(
+          value: isSelected,
+          title: Text(_name(i)),
+          onChanged: (v) {
+            setState(() {
+              if (v == true) {
+                if (!widget.session.participantIndexes.contains(i)) {
+                  widget.session.participantIndexes.add(i);
+                }
+              } else {
+                widget.session.participantIndexes.remove(i);
+              }
+
+              widget.session.order.clear();
+              widget.session.displayNo.clear();
+              widget.session.cursor = 0;
+              widget.session.matches.clear();
+            });
+          },
+        );
+      },
+    );
+  }
+
+  /// ③-9 操作ボタン群
   Widget _buildControls() {
     return Column(
       children: [
@@ -568,16 +441,20 @@ Widget build(BuildContext context) {
             DropdownButton<int>(
               value: _courts,
               items: const [1, 2, 3, 4]
-                  .map((v) => DropdownMenuItem(value: v, child: Text('$v')))
+                  .map((v) => DropdownMenuItem(
+                        value: v,
+                        child: Text('$v'),
+                      ))
                   .toList(),
               onChanged: (v) {
-                if (v != null) setState(() => _courts = v);
+                if (v != null) {
+                  setState(() => _courts = v);
+                }
               },
             ),
           ],
         ),
         const SizedBox(height: 8),
-
         Row(
           children: [
             ElevatedButton.icon(
@@ -595,7 +472,6 @@ Widget build(BuildContext context) {
             ),
           ],
         ),
-
         const SizedBox(height: 4),
         const Align(
           alignment: Alignment.centerLeft,
@@ -608,6 +484,7 @@ Widget build(BuildContext context) {
     );
   }
 
+  /// ③-10 試合一覧
   Widget _buildMatchList() {
     if (_matches.isEmpty) {
       return const Center(child: Text('まだ試合がありません'));
@@ -622,6 +499,7 @@ Widget build(BuildContext context) {
     );
   }
 
+  /// ③-11 試合カード
   Widget _buildMatchCard(int index, MatchPick match) {
     return InkWell(
       onTap: () async {
@@ -635,7 +513,7 @@ Widget build(BuildContext context) {
             ),
           ),
         );
-        setState(() {}); // 入力後に表示更新
+        setState(() {});
       },
       child: Card(
         child: Padding(
@@ -643,9 +521,14 @@ Widget build(BuildContext context) {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('試合${index + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                '試合${index + 1}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 6),
-              Text('${_name(match.a1)} & ${_name(match.a2)}  vs  ${_name(match.b1)} & ${_name(match.b2)}'),
+              Text(
+                '${_name(match.a1)} & ${_name(match.a2)}  vs  ${_name(match.b1)} & ${_name(match.b2)}',
+              ),
               const SizedBox(height: 6),
               Text('スコア: ${match.scoreText}'),
               Text('結果: ${match.resultText}'),
@@ -658,9 +541,14 @@ Widget build(BuildContext context) {
 }
 
 /// =============================================================
-/// Page: スコア入力
+/// ④ スコア入力ページ
+/// -------------------------------------------------------------
+/// ④-1 Widget定義
+/// ④-2 State / controller
+/// ④-3 保存処理
+/// ④-4 build
 /// =============================================================
-/// - gameA / gameB を入力して MatchPick に保存
+
 class ScoreInputPage extends StatefulWidget {
   const ScoreInputPage({
     super.key,
@@ -677,6 +565,101 @@ class ScoreInputPage extends StatefulWidget {
   State<ScoreInputPage> createState() => _ScoreInputPageState();
 }
 
+class _ScoreInputPageState extends State<ScoreInputPage> {
+  /// ④-2 controller
+  late final TextEditingController _teamAScoreController;
+  late final TextEditingController _teamBScoreController;
+
+  String _name(int i) => widget.displayName(i);
+
+  @override
+  void initState() {
+    super.initState();
+    _teamAScoreController = TextEditingController(
+      text: widget.match.gameA?.toString() ?? '',
+    );
+    _teamBScoreController = TextEditingController(
+      text: widget.match.gameB?.toString() ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _teamAScoreController.dispose();
+    _teamBScoreController.dispose();
+    super.dispose();
+  }
+
+  /// ④-3 保存処理
+  void _save() {
+    final ga = int.tryParse(_teamAScoreController.text.trim());
+    final gb = int.tryParse(_teamBScoreController.text.trim());
+
+    setState(() {
+      widget.match.gameA = ga;
+      widget.match.gameB = gb;
+    });
+
+    Navigator.pop(context);
+  }
+
+  /// ④-4 UI
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.match;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('スコア入力')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${_name(m.a1)} & ${_name(m.a2)}  vs  ${_name(m.b1)} & ${_name(m.b2)}',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _teamAScoreController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'チームA ゲーム数',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _teamBScoreController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'チームB ゲーム数',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _save,
+                child: const Text('保存'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text('※ 空欄のまま保存すると「未入力」扱いになります'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// =============================================================
+/// ⑤ 個人成績ページ
+/// -------------------------------------------------------------
+/// ⑤-1 Widget定義
+/// ⑤-2 build
+/// =============================================================
+
 class StatsPage extends StatelessWidget {
   const StatsPage({
     super.key,
@@ -687,13 +670,10 @@ class StatsPage extends StatelessWidget {
 
   final List<Player> players;
   final List<PlayerStats> stats;
-
-  // 表示名を MatchListPage と揃えるために、name関数を受け取る
   final String Function(int index) displayName;
 
   @override
   Widget build(BuildContext context) {
-    // ★最終順位：総獲得ゲーム数（gamesFor）で降順
     final order = List<PlayerStats>.from(stats)
       ..sort((a, b) => b.gamesFor.compareTo(a.gamesFor));
 
@@ -723,6 +703,15 @@ class StatsPage extends StatelessWidget {
   }
 }
 
+/// =============================================================
+/// ⑥ セッション一覧ページ
+/// -------------------------------------------------------------
+/// ⑥-1 Widget定義
+/// ⑥-2 セッション作成
+/// ⑥-3 セッションを開く
+/// ⑥-4 build
+/// =============================================================
+
 class SessionListPage extends StatefulWidget {
   const SessionListPage({
     super.key,
@@ -738,6 +727,7 @@ class SessionListPage extends StatefulWidget {
 class _SessionListPageState extends State<SessionListPage> {
   final List<Session> _sessions = [];
 
+  /// ⑥-2 セッション作成
   void _createSession() async {
     if (widget.players.length < 4) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -778,25 +768,27 @@ class _SessionListPageState extends State<SessionListPage> {
       id: now.microsecondsSinceEpoch.toString(),
       title: title,
       createdAt: now,
-      participantIndexes: List<int>.generate(widget.players.length, (i) => i), // デフォ全員参加
+      participantIndexes: List<int>.generate(widget.players.length, (i) => i),
       courts: 1,
     );
 
     setState(() => _sessions.insert(0, s));
   }
 
+  /// ⑥-3 セッションを開く
   void _open(Session s) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => MatchListPage(
           players: widget.players,
-          session: s, // ★ここが今回の要
+          session: s,
         ),
       ),
-    ).then((_) => setState(() {})); // 戻ったら一覧更新（タイトル変更等に備えて）
+    ).then((_) => setState(() {}));
   }
 
+  /// ⑥-4 UI
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -825,87 +817,152 @@ class _SessionListPageState extends State<SessionListPage> {
   }
 }
 
+/// =============================================================
+/// ⑦ プレイヤー登録ページ
+/// -------------------------------------------------------------
+/// ⑦-1 Widget定義
+/// ⑦-2 プレイヤー追加
+/// ⑦-3 プレイヤー編集
+/// ⑦-4 プレイヤー削除
+/// ⑦-5 セッション一覧へ移動
+/// ⑦-6 build
+/// =============================================================
 
-
-class _ScoreInputPageState extends State<ScoreInputPage> {
-  late final TextEditingController _teamAScoreController;
-  late final TextEditingController _teamBScoreController;
-
-  // NOTE:
-  // ここでは「表示番号シャッフル」は反映していません。
-  // 反映したい場合は displayNo を渡す設計にします（後でOK）。
-  String _name(int i) => widget.displayName(i);
-
+class PlayerRegisterPage extends StatefulWidget {
+  const PlayerRegisterPage({super.key});
 
   @override
-  void initState() {
-    super.initState();
-    _teamAScoreController = TextEditingController(text: widget.match.gameA?.toString() ?? '');
-    _teamBScoreController = TextEditingController(text: widget.match.gameB?.toString() ?? '');
+  State<PlayerRegisterPage> createState() => _PlayerRegisterPageState();
+}
+
+class _PlayerRegisterPageState extends State<PlayerRegisterPage> {
+  final TextEditingController _nameController = TextEditingController();
+  final List<Player> _players = [];
+
+  /// ⑦-2 プレイヤー追加
+  void _addPlayer() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
+
+    setState(() {
+      _players.add(Player(name: name));
+      _nameController.clear();
+    });
+  }
+
+  /// ⑦-3 プレイヤー編集
+  Future<void> _editPlayerName(int index) async {
+    final player = _players[index];
+    final editController = TextEditingController(text: player.name);
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('名前を編集'),
+        content: TextField(
+          controller: editController,
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, editController.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      setState(() => player.name = result);
+    }
+  }
+
+  /// ⑦-4 プレイヤー削除
+  void _deletePlayer(int index) {
+    setState(() => _players.removeAt(index));
+  }
+
+  /// ⑦-5 セッション一覧へ移動
+  void _goToMatches() {
+    if (_players.length < 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('最低4人登録してください')),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SessionListPage(
+          players: List<Player>.from(_players),
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _teamAScoreController.dispose();
-    _teamBScoreController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
-  void _save() {
-    final ga = int.tryParse(_teamAScoreController.text.trim());
-    final gb = int.tryParse(_teamBScoreController.text.trim());
-
-    setState(() {
-      widget.match.gameA = ga;
-      widget.match.gameB = gb;
-    });
-
-    Navigator.pop(context);
-  }
-
+  /// ⑦-6 UI
   @override
   Widget build(BuildContext context) {
-    final m = widget.match;
-
     return Scaffold(
-      appBar: AppBar(title: const Text('スコア入力')),
+      appBar: AppBar(
+        title: const Text('プレイヤー登録'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.arrow_forward),
+            tooltip: '対戦表へ',
+            onPressed: _goToMatches,
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${_name(m.a1)} & ${_name(m.a2)}  vs  ${_name(m.b1)} & ${_name(m.b2)}'),
-            const SizedBox(height: 16),
-
             TextField(
-              controller: _teamAScoreController,
-              keyboardType: TextInputType.number,
+              controller: _nameController,
               decoration: const InputDecoration(
-                labelText: 'チームA ゲーム数',
+                labelText: '名前を入力',
                 border: OutlineInputBorder(),
               ),
+              onSubmitted: (_) => _addPlayer(),
             ),
             const SizedBox(height: 12),
-
-            TextField(
-              controller: _teamBScoreController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'チームB ゲーム数',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 20),
-
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _save,
-                child: const Text('保存'),
+                onPressed: _addPlayer,
+                child: const Text('追加'),
               ),
             ),
-            const SizedBox(height: 8),
-            const Text('※ 空欄のまま保存すると「未入力」扱いになります'),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _players.length,
+                itemBuilder: (context, index) {
+                  final player = _players[index];
+                  return ListTile(
+                    leading: Text('${index + 1}'),
+                    title: Text(player.name),
+                    onTap: () => _editPlayerName(index),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete),
+                      onPressed: () => _deletePlayer(index),
+                    ),
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
