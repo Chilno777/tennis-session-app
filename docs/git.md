@@ -1,5 +1,10 @@
 gitの使い方について
 
+git add .
+git commit -m ""
+git push
+
+
 〇機能追加の流れ
 ①状態確認
 git status
