@@ -31,3 +31,13 @@ UIをヘルパー関数に分割
 build構造を整理
 
 未使用コードを削除
+
+2026/04/14
+問題：セッションが消える
+原因：SessionListPage の State 内に final List<Session> _sessions = []; を持っていて、PlayerRegisterPage から SessionListPage を開くたびに新しい画面インスタンスが作られるので、セッション一覧が初期化されてしまう。
+修正：SessionListPage で持っていた _sessions
+を
+PlayerRegisterPage 側へ持ち上げて
+SessionListPage に参照で渡す
+
+形にする。
