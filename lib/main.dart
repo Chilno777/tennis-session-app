@@ -332,6 +332,11 @@ class _MatchListPageState extends State<MatchListPage> {
       }
     }
 
+    // ★セッション参加者だけに絞る
+    final participantSet = widget.session.participantIndexes.toSet();
+
+    stats.removeWhere((s) => !participantSet.contains(s.playerIndex));
+
     return stats;
   }
 
@@ -801,7 +806,7 @@ class _SessionListPageState extends State<SessionListPage> {
           ? const Center(child: Text('右下の＋からセッションを作成'))
           : ListView.separated(
               itemCount: _sessions.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, i) {
                 final s = _sessions[i];
                 return ListTile(
