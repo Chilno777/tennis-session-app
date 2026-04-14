@@ -714,16 +714,18 @@ class SessionListPage extends StatefulWidget {
   const SessionListPage({
     super.key,
     required this.players,
+    required this.sessions,
   });
 
   final List<Player> players;
+  final List<Session> sessions;
 
   @override
   State<SessionListPage> createState() => _SessionListPageState();
 }
 
 class _SessionListPageState extends State<SessionListPage> {
-  final List<Session> _sessions = [];
+  List<Session> get _sessions => widget.sessions;
 
   /// ⑥-2 セッション作成
   void _createSession() async {
@@ -836,6 +838,7 @@ class PlayerRegisterPage extends StatefulWidget {
 class _PlayerRegisterPageState extends State<PlayerRegisterPage> {
   final TextEditingController _nameController = TextEditingController();
   final List<Player> _players = [];
+  final List<Session> _sessions = [];
 
   /// ⑦-2 プレイヤー追加
   void _addPlayer() {
@@ -897,7 +900,8 @@ class _PlayerRegisterPageState extends State<PlayerRegisterPage> {
       context,
       MaterialPageRoute(
         builder: (_) => SessionListPage(
-          players: List<Player>.from(_players),
+          players: _players,
+          sessions: _sessions,
         ),
       ),
     );
