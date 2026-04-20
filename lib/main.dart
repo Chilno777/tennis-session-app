@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 /// =============================================================
 /// ① アプリ全体の概要
 /// -------------------------------------------------------------
@@ -80,6 +81,29 @@ class MatchPick {
     if (gameA! < gameB!) return 'B勝ち';
     return '引き分け';
   }
+
+Map<String, dynamic> toJson() {
+  return {
+    'a1': a1,
+    'a2': a2,
+    'b1': b1,
+    'b2': b2,
+    'gameA': gameA,
+    'gameB': gameB,
+  };
+}
+
+factory MatchPick.fromJson(Map<String, dynamic> json) {
+  return MatchPick(
+    a1: json['a1'],
+    a2: json['a2'],
+    b1: json['b1'],
+    b2: json['b2'],
+    gameA: json['gameA'],
+    gameB: json['gameB'],
+  );
+}
+
 }
 
 /// ②-3 セッション
@@ -114,6 +138,42 @@ class Session {
 
   /// この回で作られた試合一覧
   final List<MatchPick> matches = [];
+
+  Map<String, dynamic> toJson() {
+  return {
+    'id': id,
+    'title': title,
+    'createdAt': createdAt.toIso8601String(),
+    'participantIndexes': participantIndexes,
+    'courts': courts,
+    'displayNo': displayNo,
+    'order': order,
+    'cursor': cursor,
+    'matches': matches.map((m) => m.toJson()).toList(),
+  };
+}
+
+factory Session.fromJson(Map<String, dynamic> json) {
+  final s = Session(
+    id: json['id'],
+    title: json['title'],
+    createdAt: DateTime.parse(json['createdAt']),
+    participantIndexes: List<int>.from(json['participantIndexes']),
+    courts: json['courts'],
+  );
+
+  s.displayNo = Map<int, int>.from(json['displayNo']);
+  s.order = List<int>.from(json['order']);
+  s.cursor = json['cursor'];
+
+  s.matches.addAll(
+    (json['matches'] as List)
+        .map((m) => MatchPick.fromJson(m)),
+  );
+
+  return s;
+}
+
 }
 
 /// ②-4 個人成績
@@ -720,10 +780,12 @@ class SessionListPage extends StatefulWidget {
     super.key,
     required this.players,
     required this.sessions,
+    required this.onSave, // ★追加
   });
 
   final List<Player> players;
   final List<Session> sessions;
+  final Future<void> Function() onSave;
 
   @override
   State<SessionListPage> createState() => _SessionListPageState();
@@ -778,7 +840,70 @@ class _SessionListPageState extends State<SessionListPage> {
     );
 
     setState(() => _sessions.insert(0, s));
+    await widget.onSave();
   }
+
+  void _editSession(int index) async {
+  final session = _sessions[index];
+  final controller = TextEditingController(text: session.title);
+
+  final result = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('セッション名を編集'),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('キャンセル'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, controller.text.trim()),
+          child: const Text('保存'),
+        ),
+      ],
+    ),
+  );
+
+  if (result != null && result.isNotEmpty) {
+    setState(() {
+      session.title = result;
+    });
+
+    await widget.onSave();
+  }
+}
+
+void _deleteSession(int index) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('削除確認'),
+      content: const Text('このセッションを削除しますか？'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('キャンセル'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('削除'),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmed == true) {
+    setState(() {
+      _sessions.removeAt(index);
+    });
+
+   await widget.onSave();
+  }
+}
 
   /// ⑥-3 セッションを開く
   void _open(Session s) {
@@ -794,34 +919,47 @@ class _SessionListPageState extends State<SessionListPage> {
   }
 
   /// ⑥-4 UI
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('セッション一覧')),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _createSession,
-        child: const Icon(Icons.add),
-      ),
-      body: _sessions.isEmpty
-          ? const Center(child: Text('右下の＋からセッションを作成'))
-          : ListView.separated(
-              itemCount: _sessions.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final s = _sessions[i];
-                return ListTile(
-                  title: Text(s.title),
-                  subtitle: Text(
-                    '参加者 ${s.participantIndexes.length}人 / 試合 ${s.matches.length}件',
-                  ),
-                  onTap: () => _open(s),
-                );
-              },
-            ),
-    );
-  }
-}
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(title: const Text('セッション一覧')),
+    floatingActionButton: FloatingActionButton(
+      onPressed: _createSession,
+      child: const Icon(Icons.add),
+    ),
+    body: _sessions.isEmpty
+        ? const Center(child: Text('右下の＋からセッションを作成'))
+        : ListView.separated(
+            itemCount: _sessions.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, i) {
+              final s = _sessions[i];
+              return ListTile(
+                title: Text(s.title),
+                subtitle: Text(
+                  '参加者 ${s.participantIndexes.length}人 / 試合 ${s.matches.length}件',
+                ),
+                onTap: () => _open(s),
 
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: () => _editSession(i),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete),
+                      onPressed: () => _deleteSession(i),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+  );
+}
+}
 /// =============================================================
 /// ⑦ プレイヤー登録ページ
 /// -------------------------------------------------------------
@@ -844,6 +982,47 @@ class _PlayerRegisterPageState extends State<PlayerRegisterPage> {
   final TextEditingController _nameController = TextEditingController();
   final List<Player> _players = [];
   final List<Session> _sessions = [];
+
+   // ===============================
+  // ⑦-1 永続化（保存・読込）
+  // ===============================
+
+  Future<void> _saveSessions() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final data = _sessions.map((s) => s.toJson()).toList();
+    final jsonString = jsonEncode(data);
+
+    await prefs.setString('sessions', jsonString);
+  }
+
+  Future<void> _loadSessions() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final jsonString = prefs.getString('sessions');
+    if (jsonString == null) return;
+
+    final List data = jsonDecode(jsonString);
+
+    setState(() {
+      _sessions.clear();
+      _sessions.addAll(
+        data.map((e) => Session.fromJson(e)),
+      );
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSessions();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
 
   /// ⑦-2 プレイヤー追加
   void _addPlayer() {
@@ -907,15 +1086,10 @@ class _PlayerRegisterPageState extends State<PlayerRegisterPage> {
         builder: (_) => SessionListPage(
           players: _players,
           sessions: _sessions,
+          onSave: _saveSessions, // ★追加
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
   }
 
   /// ⑦-6 UI
@@ -975,4 +1149,5 @@ class _PlayerRegisterPageState extends State<PlayerRegisterPage> {
       ),
     );
   }
+
 }
