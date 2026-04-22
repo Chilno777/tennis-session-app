@@ -219,10 +219,12 @@ class MatchListPage extends StatefulWidget {
     super.key,
     required this.players,
     required this.session,
+    required this.onSave,
   });
 
   final List<Player> players;
   final Session session;
+  final Future<void> Function() onSave;
 
   @override
   State<MatchListPage> createState() => _MatchListPageState();
@@ -404,7 +406,12 @@ class _MatchListPageState extends State<MatchListPage> {
   /// ③-7 メインUI
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return WillPopScope(
+      onWillPop: () async {
+        await widget.onSave(); // ★追加
+        return true;
+      },
+      child:Scaffold(
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -459,6 +466,7 @@ class _MatchListPageState extends State<MatchListPage> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -914,6 +922,7 @@ void _deleteSession(int index) async {
         builder: (_) => MatchListPage(
           players: widget.players,
           session: s,
+          onSave: widget.onSave,
         ),
       ),
     ).then((_) => setState(() {}));
@@ -1020,7 +1029,10 @@ class _PlayerRegisterPageState extends State<PlayerRegisterPage> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => _loadSessions());
+    Future.microtask(() async {
+      await _loadPlayers();
+      await _loadSessions();
+    });
   }
 
   @override
@@ -1029,16 +1041,37 @@ class _PlayerRegisterPageState extends State<PlayerRegisterPage> {
     super.dispose();
   }
 
-  /// ⑦-2 プレイヤー追加
-  void _addPlayer() {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) return;
+  Future<void> _savePlayers() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final data = _players.map((p) => p.name).toList();
+    await prefs.setStringList('players', data);
+  }
+
+  Future<void> _loadPlayers() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final data = prefs.getStringList('players');
+    if (data == null) return;
 
     setState(() {
-      _players.add(Player(name: name));
-      _nameController.clear();
+      _players.clear();
+      _players.addAll(data.map((name) => Player(name: name)));
     });
   }
+
+/// ⑦-2 プレイヤー追加
+void _addPlayer() async { // ← async 付ける
+  final name = _nameController.text.trim();
+  if (name.isEmpty) return;
+
+  setState(() {
+    _players.add(Player(name: name));
+    _nameController.clear();
+  });
+
+  await _savePlayers(); // ★ここ追加
+}
 
   /// ⑦-3 プレイヤー編集
   Future<void> _editPlayerName(int index) async {
@@ -1068,12 +1101,16 @@ class _PlayerRegisterPageState extends State<PlayerRegisterPage> {
 
     if (result != null && result.isNotEmpty) {
       setState(() => player.name = result);
+
+      await _savePlayers(); // ★ここ追加
     }
   }
 
   /// ⑦-4 プレイヤー削除
-  void _deletePlayer(int index) {
+  void _deletePlayer(int index) async {
     setState(() => _players.removeAt(index));
+
+    await _savePlayers(); // ★ここ追加
   }
 
   /// ⑦-5 セッション一覧へ移動
