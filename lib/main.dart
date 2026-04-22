@@ -162,7 +162,8 @@ factory Session.fromJson(Map<String, dynamic> json) {
     courts: json['courts'],
   );
 
-  s.displayNo = Map<int, int>.from(json['displayNo']);
+  s.displayNo = (json['displayNo'] as Map<String, dynamic>)
+    .map((key, value) => MapEntry(int.parse(key), value as int));
   s.order = List<int>.from(json['order']);
   s.cursor = json['cursor'];
 
@@ -994,6 +995,8 @@ class _PlayerRegisterPageState extends State<PlayerRegisterPage> {
     final jsonString = jsonEncode(data);
 
     await prefs.setString('sessions', jsonString);
+    print("SAVE CALLED");
+    print(jsonString);
   }
 
   Future<void> _loadSessions() async {
@@ -1010,12 +1013,14 @@ class _PlayerRegisterPageState extends State<PlayerRegisterPage> {
         data.map((e) => Session.fromJson(e)),
       );
     });
+    print("LOAD CALLED");
+    print(jsonString);
   }
 
   @override
   void initState() {
     super.initState();
-    _loadSessions();
+    Future.microtask(() => _loadSessions());
   }
 
   @override
